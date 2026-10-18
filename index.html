@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#f7dced" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Sofi 2.0" />
+  <title>🌷 Sofi 2.0</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="apple-touch-icon" href="favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style id="gate-style">
+    #gate { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px;
+      background: radial-gradient(circle at 30% 20%, #fce7f3, #fdf8fa 60%);
+      font-family: 'Quicksand', system-ui, sans-serif; color: #3d363c; }
+    #gate[hidden] { display: none; }
+    .g-card { width: 100%; max-width: 360px; box-sizing: border-box; background: #fff; border: 1px solid #f0e4ed;
+      border-radius: 28px; padding: 28px 24px; box-shadow: 0 12px 40px -14px rgba(150,100,140,.4); text-align: center; }
+    .g-logo { width: 64px; height: 64px; border-radius: 22px; background: #fce7f3; display: grid; place-items: center;
+      margin: 0 auto 12px; font-size: 32px; }
+    .g-title { font-size: 24px; font-weight: 700; margin: 0; }
+    .g-sub { font-size: 13px; color: #918691; margin: 6px 0 20px; }
+    .g-input { width: 100%; box-sizing: border-box; font: inherit; font-size: 16px; padding: 12px 16px;
+      border: 1px solid #f0e4ed; border-radius: 18px; background: #f9f3f7; color: #3d363c; outline: none; }
+    .g-input:focus { border-color: #ea95ba; background: #fff; box-shadow: 0 0 0 3px rgba(234,149,186,.3); }
+    .g-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #918691;
+      margin: 12px 2px 16px; cursor: pointer; text-align: left; }
+    .g-row input { accent-color: #ea95ba; width: 16px; height: 16px; }
+    .g-btn { width: 100%; font: inherit; font-weight: 700; font-size: 15px; padding: 13px; border-radius: 999px;
+      border: 0; background: #ea95ba; color: #fff; cursor: pointer; box-shadow: 0 6px 24px -12px rgba(190,130,165,.6); }
+    .g-btn:disabled { opacity: .6; cursor: wait; }
+    .g-err { color: #e11d48; font-size: 13px; min-height: 18px; margin-top: 10px; }
+  </style>
+  <script src="payload.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <div id="gate" hidden>
+    <form class="g-card" id="gate-form" autocomplete="on">
+      <div class="g-logo">🌷</div>
+      <h1 class="g-title">Sofi 2.0</h1>
+      <p class="g-sub">Acceso privado · escribe tu contraseña</p>
+      <input type="text" name="username" value="sofi-2" autocomplete="username" hidden />
+      <input class="g-input" id="gate-pass" type="password" placeholder="Contraseña" autocomplete="current-password" autofocus />
+      <label class="g-row"><input type="checkbox" id="gate-remember" checked /> Recordarme en este dispositivo</label>
+      <button class="g-btn" id="gate-btn" type="submit">Entrar</button>
+      <div class="g-err" id="gate-err"></div>
+    </form>
+  </div>
+
+  <script>
+  (function () {
+    var KEY_LS = 'sofi2_web_key';
+    var P = window.SOFI_PAYLOAD;
+    var gate = document.getElementById('gate');
+    var form = document.getElementById('gate-form');
+    var pass = document.getElementById('gate-pass');
+    var remember = document.getElementById('gate-remember');
+    var btn = document.getElementById('gate-btn');
+    var err = document.getElementById('gate-err');
+    var enc = new TextEncoder();
+
+    function b64ToBytes(s) { var b = atob(s), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+    function bytesToB64(a) { var s = ''; a = new Uint8Array(a); for (var i = 0; i < a.length; i++) s += String.fromCharCode(a[i]); return btoa(s); }
+    function lsGet() { try { return localStorage.getItem(KEY_LS); } catch (e) { return null; } }
+    function lsSet(v) { try { v == null ? localStorage.removeItem(KEY_LS) : localStorage.setItem(KEY_LS, v); } catch (e) {} }
+
+    // Abre la dirección terminada en #salir para olvidar la contraseña en este dispositivo.
+    if (location.hash === '#salir') { lsSet(null); history.replaceState(null, '', location.pathname); }
+
+    function deriveKey(pw) {
+      return crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveKey']).then(function (base) {
+        return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64ToBytes(P.salt), iterations: P.iter, hash: 'SHA-256' },
+          base, { name: 'AES-GCM', length: 256 }, true, ['decrypt']);
+      });
+    }
+    function decrypt(key) {
+      return crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64ToBytes(P.iv) }, key, b64ToBytes(P.data))
+        .then(function (buf) { return JSON.parse(new TextDecoder().decode(buf)); });
+    }
+    function run(app) {
+      gate.remove();
+      document.getElementById('gate-style').remove();
+      var style = document.createElement('style');
+      style.textContent = app.css;
+      document.head.appendChild(style);
+      var s = document.createElement('script');
+      s.type = 'module';
+      s.textContent = app.js;
+      document.body.appendChild(s);
+    }
+    function showGate() { gate.hidden = false; setTimeout(function () { pass.focus(); }, 50); }
+
+    if (!window.crypto || !crypto.subtle) {
+      showGate(); err.textContent = 'Abre esta página con https:// para poder entrar.'; btn.disabled = true; return;
+    }
+
+    var saved = lsGet();
+    if (saved) {
+      crypto.subtle.importKey('raw', b64ToBytes(saved), 'AES-GCM', false, ['decrypt'])
+        .then(decrypt).then(run).catch(function () { lsSet(null); showGate(); });
+    } else {
+      showGate();
+    }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (!pass.value) return;
+      btn.disabled = true; btn.textContent = 'Abriendo…'; err.textContent = '';
+      var k;
+      deriveKey(pass.value).then(function (key) { k = key; return decrypt(key); }).then(function (app) {
+        if (remember.checked) {
+          crypto.subtle.exportKey('raw', k).then(function (raw) { lsSet(bytesToB64(raw)); });
+        }
+        run(app);
+      }).catch(function () {
+        err.textContent = 'Contraseña incorrecta.';
+        btn.disabled = false; btn.textContent = 'Entrar'; pass.select();
+      });
+    });
+  })();
+  </script>
+</body>
+</html>
